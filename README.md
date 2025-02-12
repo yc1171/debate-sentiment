@@ -79,3 +79,20 @@ The following open source packages are used in this project:
 * gridExtra
 * quenteda
 * quanteda.sentiment
+
+<br>
+
+<!-- CONTRIBUTORS -->
+<h2 id="contributors">Contributors</h2>
+
+<p>
+This replication study was conducted as part of the replication exercise for 
+PPOL 6801 - Text as Data (Spring 2025) at 
+<a href="https://mccourt.georgetown.edu/">Georgetown University, McCourt School of Public Policy</a>.
+</p>
+
+<ul>
+  <li><strong>Irene Chen</strong> - <a href="mailto:yc1171@georgetown.edu">yc1171@georgetown.edu</a></li>
+  <li><strong>Tian Tong</strong> - <a href="mailto:yt583@georgetown.edu">yt583@georgetown.edu</a></li>
+</ul>
+
