@@ -17,7 +17,9 @@ The study constructs a domain-specific polarity lexicon and investigates how sen
   <li><strong>Dataset:</strong> <a href="https://github.com/lrheault/emotion">Available on GitHub</a></li>
 </ul>
 
----
+<br>
+
+
 
 <!-- MOTIVATION -->
 <h2 id="motivation-for-replication">Motivation for Replication</h2>
@@ -36,7 +38,9 @@ We selected this paper for replication because:
 Our replication exercise aims to verify the original findings and explore potential variations using <strong>updated methodologies and datasets</strong>.
 </p>
 
----
+
+<br>
+
 
 <!-- DATASET -->
 <h2 id="dataset">Dataset</h2>
@@ -57,7 +61,8 @@ It links this period to labor conflicts, economic downturns, and inflation spike
 </ul>
 
 
----
+<br>
+
 
 <!-- PREREQUISITES -->
 <h2 id="prerequisites"> Prerequisites</h2>
