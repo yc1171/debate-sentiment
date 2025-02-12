@@ -82,6 +82,58 @@ The following open source packages are used in this project:
 
 <br>
 
+<!-- PROJECT FILES -->
+<h2 id="project-files">Project Files</h2>
+
+<p>
+This repository contains datasets, scripts, and output files for our replication study. 
+Our replication includes modifications and additional analysis, detailed below.
+</p>
+
+---
+
+<h3> Data</h3>
+
+<ul>
+  <li><code>emotion-final-q.csv</code> - Final dataset (quarterly, normalized variables).</li>
+  <li><code>emotion-final-y.csv</code> - Final dataset (yearly, normalized variables).</li>
+  <li><code>lexicon-polarity.csv</code> - Domain-specific polarity lexicon (4200 words).</li>
+</ul>
+
+---
+
+<h3> Scripts</h3>
+
+<ul>
+  <li><code>replication-script.r</code> - R script for replicating the sentiment analysis and generating outputs.</li>
+</ul>
+
+---
+
+<h3> Output</h3>
+
+<ul>
+  <li><code>AFINN_senti_comp.png</code> - Sentiment comparison using the AFINN lexicon.</li>
+  <li><code>BING_senti_comp.png</code> - Sentiment comparison using the BING lexicon.</li>
+  <li><code>LSD_senti_comp.png</code> - Sentiment comparison using the LSD lexicon.</li>
+  <li><code>comp_with_author.png</code> - Comparison of our sentiment analysis results with the original authors' findings.</li>
+  <li><code>senti_misery.png</code> - Sentiment trends compared with the misery index.</li>
+  <li><code>senti_unemp.png</code> - Sentiment trends compared with unemployment rates.</li>
+</ul>
+
+---
+
+<h3> Modifications and Extensions </h3>
+
+<ul>
+  <li>Reproduced the original sentiment analysis using updated scripts.</li>
+  <li>Generated sentiment comparison plots with multiple lexicons (AFINN, BING, LSD).</li>
+  <li>Performed sentiment correlation analysis with economic indicators (misery index, unemployment).</li>
+  <li>Validated results by comparing with the original author's dataset.</li>
+</ul>
+
+<br>
+
 <!-- CONTRIBUTORS -->
 <h2 id="contributors">Contributors</h2>
 
