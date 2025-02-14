@@ -1,15 +1,13 @@
 <h1 align="center"> Measuring Emotion in Parliamentary Debates </h1>
-<h3 align="center"> A Replication Study with Automated Textual Analysis(1973- 1977) </h3>  
+<h3 align="center"> A Replication Study with Automated Textual Analysis(1973-1977) </h3>  
 
 
 <!-- INTRODUCTIONS -->
 <h2 id="overview">Overview</h2>
 
 <p>
-This repository contains our replication of <a href="https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0168843">
-<em>Measuring Emotion in Parliamentary Debates with Automated Textual Analysis</em></a> by Rheault et al. (2016). 
-The original study applies natural language processing techniques to analyze emotional polarity in British parliamentary debates over a century. 
-The study constructs a domain-specific polarity lexicon and investigates how sentiment trends align with political and economic events.
+This repository contains our partial replication of ["Measuring Emotion in Parliamentary Debates with Automated Textual Analysis"](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0168843) by Rheault et al. (2016). The original study examined the relationship between economic conditions and sentiments in parliamentary discourse by constructing a domain-specific lexicon and analyzing temporal patterns in political discourse. Our replication focuses on validating their sentiment measurement approach using multiple general-purpose lexicons, with a specific focus on the 1973-1977 period.
+
 </p>
 
 <ul>
@@ -29,10 +27,11 @@ We selected this paper for replication because:
 </p>
 
 <ul>
-  <li>It demonstrates the use of <strong>domain-specific sentiment lexicons</strong>, a critical technique in text analysis.</li>
-  <li>It explores <strong>temporal sentiment trends</strong>, allowing comparisons with real-world political and economic events.</li>
-  <li>It provides a <strong>structured approach to sentiment aggregation</strong>, useful for applications in text representation and computational social science.</li>
+  <li>It demonstrates the case where use of a<strong>domain-specific sentiment lexicon</strong> would be particularly necessary when the content of interest has certain inherent characteristics not captured by a general-purpose lexicon, and preserving those features would be relevant for the study.</li>
+  <li>Its provides a structured approach to aggregate <strong>temporal sentiment trends</strong> with comparisons of real-world economic events, which can be adapted in a wide range of quesries in computational social science. </li>
 </ul>
+
+We focus on replicating only a specific component of the original study because the original paper employs complex time series econometrics that require extensive statistical expertise. The 1973-1977 period also offers quite a clear test case due to significant economic events that allows us to compare the performance of multiple lexicons.
 
 <p>
 Our replication exercise aims to verify the original findings and explore potential variations using <strong>updated methodologies and datasets</strong>.
