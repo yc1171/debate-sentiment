@@ -32,7 +32,7 @@ We selected this paper for replication because:
   <li>The 1973-1977 period offers a clear test case with significant economic events </li>
 </ul>
 
-We focus on replicating only a specific component of the original study because the original paper employs complex time series econometrics that require extensive statistical expertise. The 1973-1977 period also offers quite a clear test case due to significant economic events that allows us to compare the performance of multiple lexicons.
+We focus on replicating only a specific component of the original study because the original paper employs complex time series econometrics that require extensive statistical expertise. The 1973-1977 period presents a robust test case, marked by significant economic events that enable a comparative analysis of lexicon performance.
 
 <p>
 Our replication exercise aims to verify the original findings and explore potential variations using <strong>updated methodologies and datasets</strong>.
@@ -47,7 +47,7 @@ Our replication exercise aims to verify the original findings and explore potent
 
 <p>
 The original study by Rheault et al. (2016) analyzed debates from the <a href="http://data.politicalmashup.nl/parldumps/uk/">British House of Commons’ Hansard</a> spanning from <strong>1909 to 2013</strong>. 
-The dataset consists of digitized parliamentary records, covering speeches, oral questions, and answers and keeps updates until now. 
+The dataset consists of digitized parliamentary records, including speeches, oral questions, and answers. The dataset has been continuously updated.
 To capture sentiment, the authors constructed a domain-specific polarity lexicon using word embeddings (GloVe) trained on this corpus.
 </p>
 
@@ -79,7 +79,7 @@ The following R packages are required:
 * tidytext
 * ggplot2
 * gridExtra
-* quenteda
+* quanteda
 * quanteda.sentiment
 
 <br>
