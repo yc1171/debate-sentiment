@@ -1,0 +1,241 @@
+---
+title: "TAD-Replication-01-EDA"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+For this replication exercise, we chose the paper "Measuring Emotion in Parliamentary Debates with Automated Textual Analysis" by Rheault et al.(2016).
+
+All codes are published in: https://github.com/lrheault/emotion/tree/master.
+
+Before the main replication exericse, we first want to inspect a sample of the dataset (which spans an entire century) and see if we can choose an optimal subset of data for replication.
+
+The key files we'll be using for this step are:
+
+1. **lexicon-polarity.csv** - Domain-specific lexicon used by the authors which we'll later compare with other sentiment lexicons
+
+2. **lexicon-generator.R** - The scripts used by the authors to generate their domain-specific lexicon
+
+3. **emotion-main-models.R** - Contains their main analysis code
+
+
+## 1. Inspect the dataset
+```{r}
+# Load required libraries
+library(tidyverse)
+library(lubridate)
+library(stringr)
+library(scales)
+library(tidytext)
+
+# Read first 5000 rows
+df <- read.csv("uk_hansard.csv", sep="\t", nrows=5000)
+
+print(head(df))
+
+#str(df)
+
+# the first 5000 rows seem to only contain speeches
+# up till the date 1919-03-05
+# print(df[2500,])
+# print(df[4999,])
+```
+
+#### Observations:
+
+The data contains these features:
+
+- **speech_id**: Contains date information (e.g., 1919-02-04) and unique identifiers
+- **name**: Speaker's name with formal titles
+- **person_id**: Unique identifier for speakers (some marked as "unknown")
+- **text**: The actual speech content
+
+### Exploratory Data Analysis
+```{r}
+df <- df %>%
+  mutate(
+    # Extract date from speech_id
+    date = as.Date(str_extract(speech_id, "\\d{4}-\\d{2}-\\d{2}")),
+    # Calculate text statistics
+    word_count = str_count(text, "\\w+"),
+    char_count = str_length(text),
+    avg_word_length = char_count / word_count,
+    known_speaker = person_id != "unknown"
+  )
+
+# 1. Time-based Analysis (within 1919)
+daily_counts <- df %>%
+  count(date) %>%
+  arrange(date)
+
+p1 <- ggplot(daily_counts, aes(x=date, y=n)) +
+  geom_line() +
+  theme_minimal() +
+  labs(title="Number of Speeches per Day in Early 1919",
+       x="Date", y="Number of Speeches") +
+  scale_x_date(date_breaks="1 week", date_labels="%b %d")
+
+# 2. Speaker Activity Analysis
+speaker_stats <- df %>%
+  group_by(name) %>%
+  summarise(
+    speeches = n(),
+    avg_length = mean(word_count),
+    total_words = sum(word_count),
+    dates_active = n_distinct(date)
+  ) %>%
+  arrange(desc(speeches))
+
+# 3. Speech Length Analysis by Speaker Type
+length_by_known <- df %>%
+  group_by(known_speaker) %>%
+  summarise(
+    avg_length = mean(word_count),
+    med_length = median(word_count),
+    n = n()
+  )
+
+# 4. Text Analysis
+
+# Remove common parliamentary terms and standard stop words
+custom_stop_words <- c("hon", "right", "house", "gentleman", "member", "minister")
+word_frequencies <- df %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  filter(!word %in% custom_stop_words) %>%
+  count(word, sort = TRUE)
+
+# 5. Daily Patterns
+df <- df %>%
+  mutate(
+    day_of_week = wday(date, label=TRUE),
+    week = week(date)
+  )
+
+# Print summary statistics
+cat("=== Dataset Overview (Early 1919) ===\n")
+cat("Date range:", min(df$date), "to", max(df$date), "\n")
+cat("Number of speeches:", nrow(df), "\n")
+cat("Number of unique speakers:", length(unique(df$name)), "\n")
+cat("Proportion of known speakers:", mean(df$known_speaker), "\n")
+
+cat("\n=== Top Speakers by Number of Speeches ===\n")
+print(head(speaker_stats, 10))
+
+cat("\n=== Speech Length Statistics ===\n")
+cat("Overall:\n")
+print(summary(df$word_count))
+cat("\nBy Speaker Type:\n")
+print(length_by_known)
+
+cat("\n=== Most Common Substantive Words ===\n")
+print(head(word_frequencies, 20))
+
+cat("\n=== Daily Activity Patterns ===\n")
+print(table(df$day_of_week))
+
+# Visualization for Daily speech counts
+p1
+```
+
+#### Observations:
+1. **Weekly Structure** in early 1919 shows that the busiest days were Monday (1245 speeches), Tuesday (1282 speeches), Wednesday (1079 speeches), and Thursday (1251 speeches). There was minimal activity on Fridays (143 speeches) and no recorded speeches on weekends, in alignment with the traditional parliamentary workweek.
+2. **Speaker Analysis** reveals the most active parliamentarians: Mr. BONAR LAW, who was Leader of the House, was by far the most prolific speaker with 336 speeches and over 21,000 total words. His average speech length of 62.9 words suggests a style of concise responses. 
+Mr. CHURCHILL follows with 206 speeches, maintaining a similar average length of 60 words. 
+Interestingly, Mr. HOGGE stands out with the highest average speech length (106.8 words) despite having fewer speeches (83), indicating a more detailed speaking style.
+3. **Speech Length Distribution** shows considerable variation. While the **median speech length is 37 words, the mean is 78.38 words**, indicating a right-skewed distribution with some very long speeches pulling the average up. The maximum speech length of 1,247 words represents extensive parliamentary addresses, while the minimum of 1 word likely represents procedural responses or interjections.
+4. **Speaker Status Analysis** reveals an important distinction between known and unknown speakers. Known speakers (83.88% of speeches) tend to make longer contributions, with an average length of 81.61 words compared to 61.57 words for unknown speakers. However, the median lengths are more similar (37.5 vs 36.0), suggesting that **the difference is driven by some very long speeches from known speakers.**
+5. **Most Common Words** reflect the political context of 1919. The prominence of terms like "government" (1505 occurrences), "war" (951), and "army" (442) indicates the **post-WWI context**. The frequent use of "friend" (1039 occurrences) likely reflects parliamentary courtesy in referring to other members. Terms like "committee", "bill", and "amendment" highlight the legislative process, while "question" suggests active parliamentary scrutiny.
+These patterns shows a parliamentary discourse **dominated by post-war governance issues**.
+
+
+## 2. Subseting for a smaller dataset (1973-1977)
+
+For our replication, we'll be targeting only the period of 1973-1977, which was identified as a critical period in the paper. It encompassed (a) the major recession of 1973-1975, (b) unprecedented spike in the Misery Index, (c) a peak in labor disputes, and (d) notable negativity in parliamentary debates. 
+
+Extending to 1977 (two years after the recession) would capture the entire period of recession and its aftermath, allowing us to see both the negative shock and potential recovery in sentiment. 
+
+
+### 2.1 Exploratory Data Analysis for subsetted data
+```{r}
+# Read the data with explicit parsing
+hansard <- read.csv("uk_hansard_1973_1977.csv", 
+                   sep = "\t",  # tab delimiter
+                   quote = "\"", # handle quotes properly
+                   stringsAsFactors = FALSE,
+                   encoding = "UTF-8")
+
+# head(hansard)
+# person_id has lots of N/A, other fields remain the same as prior
+
+# Clean and verify speech_id format
+hansard <- hansard %>%
+  mutate(
+    # Extract year using regex pattern matching the speech_id format
+    year = str_extract(speech_id, "(?<=debate/)[0-9]{4}")
+  )
+
+# Basic overview
+cat("\n=== Dataset Overview: ===\n")
+print(paste("Number of speeches:", nrow(hansard)))
+print(paste("Number of columns:", ncol(hansard)))
+
+# Year distribution
+year_counts <- table(hansard$year)
+cat("\n=== Speeches per year: ===\n")
+print(year_counts)
+```
+#### Observations:
+1. 1976 had the highest number of speeches (68,718). 1974 had the lowest (44,082). 
+2. While the median speech length is 348 characters, the mean is much higher at 1,068 characters, indicating **a right-skewed distribution with some very long speeches.** The longest speech contains 45,687 characters, while some speeches have zero length, which may require investigation as potential data quality issues.
+
+```{r}
+# Speaker analysis
+speaker_counts <- hansard %>%
+  count(name, sort = TRUE) %>%
+  head(10)
+print("Top 10 most frequent speakers:")
+print(speaker_counts)
+
+# Text length analysis
+hansard <- hansard %>%
+  mutate(text_length = nchar(as.character(text)))
+
+print("Text length summary:")
+print(summary(hansard$text_length))
+
+# Check for debate sessions per day
+daily_counts <- hansard %>%
+  mutate(date = str_extract(speech_id, "[0-9]{4}-[0-9]{2}-[0-9]{2}")) %>%
+  count(date, sort = TRUE) %>%
+  head(10)
+print("Busiest debate days (top 10):")
+print(daily_counts)
+
+# Check data quality
+print("Missing/NA values per column:")
+sapply(hansard, function(x) sum(is.na(x) | x == "N/A" | x == ""))
+
+# Sample of unique speech patterns
+print("Sample of different debate patterns (unique speech_id patterns):")
+unique_patterns <- head(unique(str_extract(hansard$speech_id, "\\d+a\\.\\d+\\.\\d+")), 10)
+print(unique_patterns)
+```
+
+#### Observations:
+1. There appears to be a clear hierarchy in participation. The Speaker and Deputy Speaker, who manage parliamentary proceedings, appear most frequently. Among regular MPs, prominent figures like Mr. Foot, Mr. Short, and Mr. Dalyell were particularly active. The Prime Minister's high frequency (6,220 speeches) indicates regular parliamentary engagement during this period.
+2. There are some particularly active sessions, with some days recording over 1,000 speeches (e.g., June 21, 1977 with 1,045 speeches). **Many of the busiest days occur in July**, suggesting increased parliamentary activity before summer recesses.
+3. While most fields are complete, all person_id entries are marked as "N/A", and there are 5 missing text entries. person_id are unique identifier of the speaker, which might not be used in this analysis and can be dropped.
+
+```{r}
+# Drop person_id and clean the data
+hansard_clean <- hansard %>%
+  select(-person_id) %>%   # Remove person_id
+  filter(!is.na(text))     # Remove rows with missing text
+
+print(paste("Rows remaining after cleaning:", nrow(hansard_clean)))
+```
+

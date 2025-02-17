@@ -1,0 +1,905 @@
+---
+title: "TAD-Replication-02"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Replication of "Measuring Emotion in Parliamentary Debates with Automated Textual Analysis (Stage 2)"
+
+## Data and Methods
+
+In this part of replication, we focus on the 1973-1977 period and applied the key methods of data preprocessing, sentiment analysis, and temporal analysis using the original paper's methodology. 
+
+
+We reference two key data sources from the original paper:
+
+1. ***Raw debate text from Hansard*** (uk_hansard_1973_1977.csv)
+2. The authors' pre-computed emotional measures and economic indicators:
+   - ***emotion-final-y.csv***: Yearly aggregated data including:
+     * Polarity measures (polar, polarg, polaro for overall, government, and opposition)
+     * Economic indicators (recession, labor disputes (ldisp), unemployment, etc.)
+   - ***emotion-final-q.csv***: Similar measures at quarterly intervals
+
+
+Our replication adapts code from the following scripts in the original repository:
+
+- ***emotion-main-models.R***: Contains their statistical analyses and visualization code
+
+- ***lexicon-generator.R***: Documents their lexicon construction methodology
+
+
+Replication Steps:
+1. Basic sentiment analysis using their lexicon
+2. Temporal aggregation of sentiment scores
+3. Comparison with author's output
+4. Experiment with different lexicons
+
+
+Key differences from original:
+- We focus on 1973-1977 rather than the full 1909-2013 period
+- We use their pre-constructed lexicon rather than building from word vectors
+
+
+### 1. Data Loading and Initial Processing
+
+```{r}
+# Load required libraries
+library(tidyverse)
+library(lubridate)
+library(stringr)
+library(scales)
+library(tidytext)
+library(ggplot2)
+library(gridExtra)
+
+# Read the data with explicit parsing
+hansard <- read.csv("uk_hansard_1973_1977.csv", 
+                   sep = "\t",  # tab delimiter
+                   quote = "\"", # handle quotes properly
+                   stringsAsFactors = FALSE,
+                   encoding = "UTF-8")
+
+# print(head(df))
+
+# Read authors' preprocessed data
+yearly_data <- read.csv("emotion-final-y.csv")
+quarterly_data <- read.csv("emotion-final-q.csv")
+
+# Filter preprocessed data to our period
+yearly_subset <- yearly_data %>%
+  filter(year >= 1973 & year <= 1977)
+quarterly_subset <- quarterly_data %>%
+  filter(year >= 1973 & year <= 1977)
+```
+
+### 2. Text Preprocessing
+
+Following the author's approach, we perform minimal text cleaning, primarily handling line breaks while preserving the original parliamentary language.
+
+```{r}
+# Define preprocessing function
+preprocess_speech <- function(text) {
+    text <- str_replace_all(text, "\\n", " ")
+    text <- str_squish(text)
+    return(text)
+}
+
+# Clean dataset
+hansard_clean <- hansard %>%
+    select(-person_id) %>%
+    filter(!is.na(text)) %>%
+    mutate(
+        text_processed = preprocess_speech(text),
+        date = str_extract(speech_id, "[0-9]{4}-[0-9]{2}-[0-9]{2}"),
+        year = str_extract(speech_id, "[0-9]{4}")
+    )
+
+# Verify preprocessing
+print("Dataset dimensions after cleaning:")
+print(dim(hansard_clean))
+
+print("\nSample of original vs processed text:")
+sample_comparison <- hansard_clean %>%
+  select(text, text_processed) %>%
+  head(5)
+print(sample_comparison)
+```
+
+#### Observations:
+
+The authors only eliminated line breaks in their preprocessing step. This is interesting because unlike many sentiment analysis applications that heavily preprocess text (removing stopwords, stemming), the authors chose to preserve more of the original parliamentary language. This approach suggests they believe formal parliamentary language carries important sentiment information. 
+
+
+### 3. Sentiment Analysis
+
+We implement a lexicon-based sentiment analysis approach using the authors' domain-specific parliamentary lexicon. The process involves:
+
+1. Sentiment Computation:
+   - **Match speech tokens** with lexicon entries
+   - Calculate **mean polarity score** from matched words
+   - Score range: -1 (most negative) to 1 (most positive)
+
+2. Aggregation:
+   - **Quarterly averaging** of speech-level scores
+   - **Standard deviation calculation** to capture variability
+   - **Normalization** to compare with authors' scale
+
+
+#### 3.1 Inspecting the Lexicon
+
+```{r}
+# Read authors' lexicon
+lexicon <- read.csv("lexicon-polarity.csv", stringsAsFactors = FALSE)
+
+# Check lexicon structure
+print("\nLexicon structure:")
+str(lexicon)
+print("\nSample of lexicon entries:")
+head(lexicon)
+```
+
+#### 3.2 Compute Polarity for a small sample
+
+```{r}
+# Define the function for computing polarity
+compute_polarity <- function(text, lexicon) {
+    words <- unlist(strsplit(tolower(text), "\\s+"))
+    matches <- match(words, lexicon$lemma)
+    matched_scores <- lexicon$polarity[matches[!is.na(matches)]]
+    if(length(matched_scores) > 0) {
+        return(mean(matched_scores, na.rm = TRUE))
+    } else {
+        return(NA)
+    }
+}
+
+# Test on first few speeches
+test_cases <- head(hansard_clean$text_processed, 3)
+for(i in seq_along(test_cases)) {
+  cat("\nAnalyzing text", i, ":\n")
+  cat("Text:", substr(test_cases[i], 1, 100), "...\n")
+  score <- compute_polarity(test_cases[i], lexicon)
+  cat("Final score:", score, "\n")
+}
+```
+
+#### Observation:
+
+1.The matched words reveal interesting aspects in the lexicon's scoring scheme:
+
+- **Action words** get moderate positive scores: "will" (0.33), "make" (0.43)
+- **Progress-related words score higher**: "progress" (0.65), "assistance" (0.52)
+- **Business terms** are neutral to positive: "firm" (0.53), "scheme" (0.38)
+- **Negative critique words** score strongly negative: "ridiculous" (-1.00)
+
+2. This suggests that the lexicon is more sensitive to the **action and progress-oriented language** which is typical in parliamentary discourse. It also captures strong negative sentiment in critical statements while assigning moderate scores to procedural/administrative language.
+
+
+#### 3.3 Perform sentiment analysis on the whole dataset
+
+```{r}
+# Calculate polarity for each speech individually
+polarities <- vector("numeric", nrow(hansard_clean))
+for(i in 1:nrow(hansard_clean)) {
+    polarities[i] <- compute_polarity(hansard_clean$text_processed[i], lexicon)
+}
+hansard_clean$polarity <- polarities
+
+# Check sentiment distribution
+print("Basic sentiment statistics:")
+print(summary(hansard_clean$polarity))
+```
+
+#### Observations:
+- Distribution shows reasonable variation: -1.0 to 1.0 (full range of sentiment)
+- Central tendency is slightly positive (mean = 0.358, median = 0.378)
+- Notable amount of missing values (**~22,800 speeches (8%) have no lexicon matches**, there's potential bias in **which types of speeches are unmatchable**)
+- Asymmetric distribution (more positive than negative scores), though it aligns with formal parliamentary language
+
+### 3.4 Quarterly Aggregation
+
+This begins the core replication by computing the key metrics from the paper: (1) ***quarterly sentiment trends*** and (2) the ***comparison between government and opposition speeches***.
+
+Other than quarterly aggregation, we also tabulated the **Standard Deviation** (the spread) of polarity score within each quarter to understand **if certain periods had more emotional volatility/consistency** in debates.
+
+```{r}
+# Authors' rescaling function
+rescale <- function(x) {2/(max(x) - min(x))*(x - min(x)) - 1}
+
+# Aggregate by quarter for comparison
+our_quarterly <- hansard_clean %>%
+    mutate(
+        # Create quarter labels
+        quarter = ceiling(as.numeric(substr(date, 6, 7))/3),
+        year_quarter = paste0(year, "-Q", quarter)
+    ) %>%
+    # Calculate quarterly metrics
+    group_by(year_quarter) %>%
+    summarize(
+        avg_polarity = mean(polarity, na.rm = TRUE), # Raw mean polarity
+        n_speeches = n(),  # Number of speeches per quarter
+        sd_polarity = sd(polarity, na.rm = TRUE),  # Spread of polarities
+        .groups = 'drop'
+    ) %>%
+    arrange(year_quarter) %>%
+    mutate(
+        polarity_diff = c(NA, diff(avg_polarity)), # Quarter-to-quarter changes
+        polarity_rescaled = rescale(avg_polarity)  # Re-scaled to [-1,1] range
+    )
+
+# Compare with authors' scores
+comparison <- our_quarterly %>%
+    mutate(
+        year = as.numeric(substr(year_quarter, 1, 4)),
+        quarter = as.numeric(gsub(".*Q", "", year_quarter))
+    ) %>%
+    left_join(
+        select(quarterly_subset, year, quarter, author_polar = polar),
+        by = c("year", "quarter")
+    )
+
+print("Our quarterly averages:")
+print(head(our_quarterly))
+
+print("\nComparison with authors' scores:")
+print(head(comparison))
+```
+```{r}
+# Plot comparing our rescaled scores with authors'
+ggplot(comparison) +
+    # Add recession shading
+    annotate("rect",
+            xmin = "1973-Q3",
+            xmax = "1975-Q2",
+            ymin = -Inf, ymax = Inf,
+            alpha = 0.2, fill = "gray") +
+    # Sentiment lines with group=1
+    geom_line(aes(x = year_quarter, y = polarity_rescaled, 
+                  color = "Our Sentiment", group = 1)) +
+    geom_line(aes(x = year_quarter, y = author_polar, 
+                  color = "Authors' Scores", group = 1)) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Sentiment Over Time",
+         subtitle = "Gray band indicates recession period (1973-Q3 to 1975-Q2)",
+         y = "Polarity Score",
+         color = "Measure Type") +
+    scale_color_manual(values = c("Our Sentiment" = "#002A48", 
+                                 "Authors' Scores" = "#8B0000"))
+
+# Print summary statistics
+print("Summary of our calculations:")
+print(summary(comparison %>% select(polarity_rescaled, author_polar)))
+```
+
+#### Comparisons:
+
+1. Scale and Distribution:
+
+- Our rescaled scores has a positive mean (0.27), but shows more extreme swings.
+- Authors' scores are **consistently negative** (-1.08 to -0.18), with a more negative mean (-0.58)
+- There are notable divergence (like in 1973-Q2/Q3, our scores peak, but author's scores show negativity); but there're also similar trends. For example, **both show a drastic slump in 1975-Q2 and 1976-Q3**, reflecting a response to exterior shocks.
+
+
+```{r}
+# Check available economic indicators
+# names(quarterly_subset)  # This shows all columns including economic indicators
+
+# join economic data
+comparison_with_econ <- comparison %>%
+    left_join(
+        select(quarterly_subset, year, quarter, misery, unemp, ldisp),
+        by = c("year", "quarter")
+    )
+
+# plot Misery Index
+ggplot(comparison_with_econ) +
+    # Add recession shading
+    annotate("rect",
+            xmin = "1973-Q3",
+            xmax = "1975-Q2",
+            ymin = -Inf, ymax = Inf,
+            alpha = 0.2, fill = "gray") +
+    geom_line(aes(x = year_quarter, y = polarity_rescaled, 
+                  group = 1, color = "Our Sentiment")) +
+    geom_line(aes(x = year_quarter, y = scale(misery)[,1], 
+                  group = 1, color = "Misery Index")) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Sentiment vs Misery Index",
+         subtitle = "Gray band indicates recession period (1973-Q3 to 1975-Q2)",
+         y = "Standardized Score",
+         color = "Measure Type") +
+    scale_color_manual(values = c("Our Sentiment" = "#002A48", 
+                                 "Misery Index" = "#8B4513"))
+
+
+# plot Unemployment
+ggplot(comparison_with_econ) +
+    # Add recession shading
+    annotate("rect",
+            xmin = "1973-Q3",
+            xmax = "1975-Q2",
+            ymin = -Inf, ymax = Inf,
+            alpha = 0.2, fill = "gray") +
+    geom_line(aes(x = year_quarter, y = polarity_rescaled, 
+                  group = 1, color = "Our Sentiment")) +
+    geom_line(aes(x = year_quarter, y = scale(unemp), 
+                  group = 1, color = "Unemployment")) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Sentiment vs Unemployment",
+         subtitle = "Gray band indicates recession period (1973-Q3 to 1975-Q2)",
+         y = "Standardized Score",
+         color = "Measure Type") +
+    scale_color_manual(values = c("Our Sentiment" = "#002A48", 
+                                 "Unemployment" = "#006400"))
+
+```
+
+#### Observations:
+1. There's a notable **inverse relationship** in several periods (e.g., 1974-Q4 to 1975-Q2), which is consistent with the author's findings.
+2. Some periods strangely show **parallel movement** (e.g., early 1974)
+3. Sentiment is expected to constantly lag behind misery index changes, but the reverse is true in some cases.
+
+
+### 4. Alternative Lexicons -- AFINN
+
+In this section, we compare our domain-specific lexicon with AFINN, **a general-purpose sentiment lexicon** built on social media texts, which might be better at capturing casual language and emotional terms. AFINN scores words on **a scale from -5 (very negative) to +5 (very positive)**--potentially better at capturing intensity of sentiment--which offers a different approach to sentiment scoring than our binary/continuous parliamentary lexicon.
+
+This comparison will help us understand how domain-specific adaptation affects sentiment analysis results, as well as the points of decision-making when applying off-the-shelf lexicons for sentiment analysis.
+
+We use the same preprocessing and aggregation methods but apply AFINN's scoring system, then standardize both measures for fair comparison. This reveals whether general sentiment tools can capture the same patterns we observed in parliamentary language.
+
+#### Applying AFINN Lexicon
+
+```{r}
+### Alternative Lexicon Comparison
+# First get AFINN lexicon
+library(tidytext)
+afinn_sentiment <- get_sentiments("afinn")
+
+# Look at AFINN structure
+print("AFINN lexicon preview:")
+head(afinn_sentiment, 10)
+print("\nAFINN stats:")
+print(paste("Number of words:", nrow(afinn_sentiment)))
+
+# Function to compute AFINN sentiment scores
+compute_afinn_sentiment <- function(text) {
+    # Split text into words
+    words <- tibble(word = unlist(strsplit(tolower(text), "\\s+")))
+    
+    # Match with AFINN lexicon
+    matched_words <- words %>%
+        inner_join(afinn_sentiment, by = "word")
+    
+    # Calculate average sentiment score
+    if(nrow(matched_words) > 0) {
+        return(mean(matched_words$value, na.rm = TRUE))
+    } else {
+        return(NA)
+    }
+}
+
+# Apply AFINN to our speeches
+hansard_clean <- hansard_clean %>%
+    mutate(afinn_score = sapply(text_processed, compute_afinn_sentiment))
+
+# Aggregate by quarter like before
+afinn_quarterly <- hansard_clean %>%
+    mutate(
+        quarter = ceiling(as.numeric(substr(date, 6, 7))/3),
+        year_quarter = paste0(year, "-Q", quarter)
+    ) %>%
+    group_by(year_quarter) %>%
+    summarize(
+        avg_afinn = mean(afinn_score, na.rm = TRUE),
+        n_speeches = n(),
+        sd_afinn = sd(afinn_score, na.rm = TRUE),
+        .groups = 'drop'
+    )
+
+# Compare with our original scores
+comparison_lexicons <- comparison %>%
+    left_join(afinn_quarterly, by = "year_quarter")
+
+comparison_lexicons <- comparison_lexicons %>%
+    left_join(
+        select(quarterly_subset, year, quarter, misery),
+        by = c("year", "quarter")
+    )
+```
+
+#### Visualize the sentiment trends
+```{r}
+# Visualization of Lexicon Comparison (along with Misery Index)
+ggplot(comparison_lexicons) +
+    # Sentiment lines
+    geom_line(aes(x = year_quarter, y = scale(polarity_rescaled), 
+                  color = "Our Lexicon"), group = 1) +
+    geom_line(aes(x = year_quarter, y = scale(avg_afinn), 
+                  color = "AFINN"), group = 1) +
+    geom_line(aes(x = year_quarter, y = scale(misery), 
+                  color = "Misery Index"), group = 1) +
+    # Add recession period marker
+    annotate("rect", 
+            xmin = which(comparison_lexicons$year_quarter == "1973-Q3"),
+            xmax = which(comparison_lexicons$year_quarter == "1975-Q2"),
+            ymin = -Inf, ymax = Inf,
+            alpha = 0.2, fill = "gray") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Sentiment and Economic Indicators",
+         subtitle = "Gray band indicates recession period (1973-Q3 to 1975-Q2)",
+         y = "Standardized Score",
+         color = "Measure Type") +
+    scale_color_manual(values = c("Our Lexicon" = "blue", 
+                                 "AFINN" = "red",
+                                 "Misery Index" = "darkgreen"))
+
+```
+
+
+#### Pattern Divergence:
+
+1. The first major divergence appears in **1975-Q2** which is at the height of energy crisis. AFINN shows a much higher peak than our lexicon, though both peaks appear prior to the Misery Index.
+
+A possible reason is that most texts during this period are about **energy policy and oil markets**, which might require the use of more stern expression and harsher language. Since AFINN is built from social media, it might be **more sensitive to emotional language** than our's that is better suited for parliamentary formality.
+
+2. A second different sensitivity appears in **1976-Q3** where our lexicon shows a deep slump approximating -2.5. 
+
+3. There's a clear **lag effect** between sentiment change and economic indicators -- only **the direction is unclear**
+
+4. **AFINN is more volatile** during economic stress periods (more sensitive to emotional language)
+
+#### Analyze the speeches with most divergent sentiment scores
+
+Note: The scoring scales are different (AFINN: -5 to 5, Ours: -1 to 1), so the absolute difference should not be taken as a reference.
+
+```{r}
+# Extract the speeches with most divergent sentiment scores
+divergent_speeches <- hansard_clean %>%
+    mutate(year_quarter = paste0(year, "-Q", 
+           ceiling(as.numeric(substr(date, 6, 7))/3))) %>%
+    filter(year_quarter %in% c("1975-Q2", "1976-Q3")) %>%
+    mutate(
+        sentiment_diff = abs(scale(afinn_score)[1] - scale(polarity)[1])
+    ) %>%
+    arrange(desc(sentiment_diff)) %>%
+    select(year_quarter, text_processed, afinn_score, polarity) %>%
+    head(10)
+
+# Print sample divergent speeches
+print("Speeches with largest sentiment score differences:")
+print(divergent_speeches)
+```
+
+```{r}
+# Check NA patterns in our analysis
+na_pattern <- hansard_clean %>%
+  filter(is.na(afinn_score)) %>%
+  select(text_processed, polarity, afinn_score) %>%
+  head(10)
+
+print("\nExample speeches with NA AFINN scores:")
+print(na_pattern)
+```
+
+#### Analyzing the Divergent Speeches:
+
+1. Aligned with what the plot shows, most texts are about **energy policy and oil markets during 1975-Q2**.
+
+2. The divergent speeches in AFINN shows interesting patterns:
+
+- Missing scores (NA) appear for many **technical/policy questions**
+- Higher scores (2.5) for EEC membership discussion
+- Moderate scores (1.0-1.5) for procedural statements
+
+3. Our lexicon shows relatively consistent scoring (0.22-0.53) across all speeches. It has the highest for **policy proposals** (0.53 for "floor price" discussion), and lower for **technical questions** (0.22-0.35).
+
+#### Likely reasons for NAs:
+
+- **Domain mismatch**: AFINN's **social media focus** might be a mismatch for the formal parliamentary language
+- **Technical vocabulary**: Highly technical terms like energy policy terms aren't in AFINN
+- **Procedural language**: Parliamentary procedures use niche, specific phrases
+
+
+#### Remove NAs and re-examine most divergent speech
+
+```{r}
+# Remove NAs and recalculate divergent speeches
+divergent_speeches_clean <- hansard_clean %>%
+    filter(!is.na(afinn_score)) %>%
+    mutate(year_quarter = paste0(year, "-Q", 
+           ceiling(as.numeric(substr(date, 6, 7))/3))) %>%
+    filter(year_quarter %in% c("1975-Q2", "1976-Q3")) %>%
+    mutate(
+        sentiment_diff = abs(scale(afinn_score)[1] - scale(polarity)[1])
+    ) %>%
+    arrange(desc(sentiment_diff)) %>%
+    select(year_quarter, text_processed, afinn_score, polarity) %>%
+    head(10)
+
+# Print sample divergent speeches
+print("Speeches with largest sentiment score differences (NAs removed):")
+print(divergent_speeches_clean)
+```
+
+#### Observations:
+Since the AFINN score and our lexicon are in different scales, the absolute ranking of these texts are not meaningful. However it's still interesting to examine sample texts that receive negative AFINN score while scoring high with our lexicon.
+
+#### Sample Text 9 (afinn score of -1.00000, polarity of 0.45623240)
+
+- Text: "There is no evidence to indicate that the Government's proposals on participation have had any effect on development in the North Sea. At the moment, more rigs are exploring the North Sea than ever before."
+
+- Analysis: AFINN might have scored **"no evidence"** and **"effect"** negatively, while the custom lexicon recognizes this as **neutral technical language** about development
+
+#### Sample Text 7 (afinn score of -1.33333, polarity of 0.22807242)
+
+- Text: "Like all enterprises in the North Sea, ours are subject to the accidents of working in such a hostile environment. It is especially disappointing that there will be a hold-up in production from the Argyll field due to the damage done to the production riser. This is one of the difficulties which cannot be avoided in North Sea oil development. There will be less oil landed this year than was thought at one time. We believe, however, that the targets for the 1980s will be maintained."
+
+- Analysis: AFINN might have heavily weighted words like **"hostile," "damage," and "difficulties"** negatively, while the custom lexicon understands these as **standard technical descriptions** of North Sea operations
+
+
+#### Sample Text 5 (afinn score of 1.50000, polarity of 0.49209525) -- more positive by our lexicon
+
+- Text: "I think that the agreement is published as a Command Paper, and I am sure that the right hon. Gentleman and many of his hon. Friends have read it already. It requires to be ratified by the House."
+
+- Analysis: AFINN misses the formal parliamentary **context**, while the custom lexicon recognizes the positive procedural language about **ratification**
+
+
+#### Sample Text 2 (afinn score of 2.50000, polarity of 0.33017160) -- more positive by AFINN
+
+- Text: "Since the agency has powers which are a good deal more supranational than any possessed by the EEC, including powers relating to the allocation of our oil supplies, will the Minister ask his right hon. Friend to seek a suitable occasion to explain how he supports British membership of the agency while opposing British membership of the EEC?"
+
+- Analysis: AFINN might have overweighted positive terms like **"good"** and **"supports,"** while the custom lexicon better understands the neutral nature of procedural questions about membership
+
+#### However, we need to check the computed sentiment for these sample texts to confirm our assumption, and to see which words actually drives the discrepency
+
+#### Examine the sentiment of 4 sample most divergent texts
+```{r}
+analyze_sentiment_comparison <- function(text, custom_lexicon, afinn_sentiment) {
+    # Split text into words
+    words <- unlist(strsplit(tolower(text), "\\s+"))
+    
+    # Find matches in custom lexicon
+    custom_matches <- words[words %in% custom_lexicon$lemma]
+    custom_scores <- sapply(custom_matches, function(w) {
+        score <- custom_lexicon$polarity[custom_lexicon$lemma == w]
+        paste(w, ":", round(score, 3))
+    })
+    
+    # Find matches in AFINN
+    afinn_matches <- words[words %in% afinn_sentiment$word]
+    afinn_scores <- sapply(afinn_matches, function(w) {
+        score <- afinn_sentiment$value[afinn_sentiment$word == w]
+        paste(w, ":", score)
+    })
+    
+    # Calculate overall scores
+    custom_score <- mean(sapply(custom_matches, function(w) 
+        custom_lexicon$polarity[custom_lexicon$lemma == w]), na.rm = TRUE)
+    afinn_score <- mean(sapply(afinn_matches, function(w) 
+        afinn_sentiment$value[afinn_sentiment$word == w]), na.rm = TRUE)
+    
+    # Print results
+    cat("\nText:", substr(text, 1, 200), "...\n")
+    cat("\nCustom Lexicon matches:\n")
+    if(length(custom_scores) > 0) {
+        cat(paste(custom_scores, collapse = "\n"), "\n")
+    } else {
+        cat("No matches found\n")
+    }
+    cat("Overall custom score:", round(custom_score, 3), "\n")
+    
+    cat("\nAFINN Lexicon matches:\n")
+    if(length(afinn_scores) > 0) {
+        cat(paste(afinn_scores, collapse = "\n"), "\n")
+    } else {
+        cat("No matches found\n")
+    }
+    cat("Overall AFINN score:", round(afinn_score, 3), "\n")
+    cat("\n", rep("-", 80), "\n")
+}
+
+# Selected sample texts
+texts <- c(
+    "There is no evidence to indicate that the Government's proposals on participation have had any effect on development in the North Sea. At the moment, more rigs are exploring the North Sea than ever before.",
+    
+    "Like all enterprises in the North Sea, ours are subject to the accidents of working in such a hostile environment. It is especially disappointing that there will be a hold-up in production from the Argyll field due to the damage done to the production riser. This is one of the difficulties which cannot be avoided in North Sea oil development. There will be less oil landed this year than was thought at one time. We believe, however, that the targets for the 1980s will be maintained.",
+    
+    "I think that the agreement is published as a Command Paper, and I am sure that the right hon. Gentleman and many of his hon. Friends have read it already. It requires to be ratified by the House.",
+    
+    "Since the agency has powers which are a good deal more supranational than any possessed by the EEC, including powers relating to the allocation of our oil supplies, will the Minister ask his right hon. Friend to seek a suitable occasion to explain how he supports British membership of the agency while opposing British membership of the EEC?"
+)
+
+# Analyze each text
+for(i in 1:length(texts)) {
+    cat("\nAnalyzing Text", i)
+    analyze_sentiment_comparison(texts[i], lexicon, afinn_sentiment)
+}
+```
+
+#### Comparisons & New Insights:
+
+#### Sample Text 9 (afinn score of -1.00000, polarity of 0.45623240)
+
+- Text: "There is no evidence to indicate that the Government's proposals on participation have had any effect on development in the North Sea. At the moment, more rigs are exploring the North Sea than ever before."
+
+- In previous analysis we thought "no evidence" and "effect" drove negative AFINN scores, but actually **AFINN only matched "no" (-1) but missed "evidence" and "effect"**. The custom lexicon found more nuanced matches including **"participation" (0.476), "effect" (0.33), "development" (0.521)**.
+
+- The discrepancy in scores partly comes from AFINN's **limited coverage but strong negative weighting of "no"**, while custom lexicon **captures more domain-specific terms with positive scores.**
+
+
+#### Sample Text 7 (afinn score of -1.33333, polarity of 0.22807242)
+
+- Text: "Like all enterprises in the North Sea, ours are subject to the accidents of working in such a hostile environment. It is especially disappointing that there will be a hold-up in production from the Argyll field due to the damage done to the production riser. This is one of the difficulties which cannot be avoided in North Sea oil development. There will be less oil landed this year than was thought at one time. We believe, however, that the targets for the 1980s will be maintained."
+
+- Our original analysis was mostly correct about negative terms driving AFINN's score - AFINN indeed picked up multiple negative words: "accidents" (-2), "hostile" (-2), "disappointing" (-2), "damage" (-3), "avoided" (-1). The custom lexicon found many more words but with moderate scores, including **positive ones like "working" (0.34), "production" (0.323)**.
+
+- Interestingly, some words have multiple scores in custom lexicon (e.g., "subject": 0.324/-0.604, "damage": -0.337/-1.0) suggesting context sensitivity.
+
+
+#### Sample Text 5 (afinn score of 1.50000, polarity of 0.49209525) -- more positive by our lexicon
+
+- Text: "I think that the agreement is published as a Command Paper, and I am sure that the right hon. Gentleman and many of his hon. Friends have read it already. It requires to be ratified by the House."
+
+- Previously we thought custom lexicon assigned highly positive score for ratification. But surprisingly, **"ratified" (2) is in AFINN but not in custom lexicon**. The custom lexicon captures more parliamentary language ("command", "gentleman", "agreement"). And **affirmative words like 'sure' and 'command' seem to drive the positivity in scoring.**
+
+
+#### Sample Text 2 (afinn score of 2.50000, polarity of 0.33017160) -- more positive by AFINN
+
+- Text: "Since the agency has powers which are a good deal more supranational than any possessed by the EEC, including powers relating to the allocation of our oil supplies, will the Minister ask his right hon. Friend to seek a suitable occasion to explain how he supports British membership of the agency while opposing British membership of the EEC?"
+
+- We assumption that AFINN might have overweighted "good" and "supports" was correct - it indeed gives high scores to "good" (3) and "supports" (2). The custom lexicon however **found many more words with moderate scores**.
+
+- Agin, some words like "Good" has multiple scores in custom lexicon (0.468/1.0), showing context sensitivity.
+
+#### Conclusions:
+
+1. The comparison shows that a large factor driving the divergence is that the custom lexicon **consistently captures more words** but **assigns moderate scores** (typically between -0.6 and 0.8), while **AFINN identifies fewer words but assigns more extreme integer scores** (-3 to +3). This difference in ***coverage*** and ***scoring granularity*** becomes particularly apparent in formal parliamentary language, where AFINN might only catch a few emotionally charged words (like "hostile" or "disappointing") with strong scores, while the custom lexicon recognizes many procedural and technical terms (like "participation," "development," "command") with nuanced scores.
+
+2. Looking at specific words that are picked up, AFINN tends to focus on **clearly emotional or evaluative terms** ("good," "hostile," "disappointing"), assigning them strong sentiment values. In contrast, the custom lexicon recognizes **a wide array of domain-specific language**. 
+
+3. However, some formal terms we might expect in parliamentary discourse (like "ratified") are curiously absent from the custom lexicon, while appearing in AFINN.
+
+
+#### Implications:
+
+- Strength of using a custom lexicon is its broader coverage and context sensitivity.
+
+- Weakness however is that the moderate scoring approach might potentially **underestimate extreme emotional expressions** that a general purpose lexicon like AFINN captures well.
+
+- There might be a trade-off between **domain specificity** and **emotional intensity** in representing the "true" sentiment of texts: The custom lexicon might better reflect the measured tone typical of parliamentary discourse, but we could also argue that it could **potentially bias the analysis toward the middle**. 
+
+
+### 5. Alternative Lexicon: LSD2015
+
+```{r}
+library(quanteda)
+library(quanteda.sentiment)
+
+# Create corpus and calculate LSD sentiment
+corpus_hansard <- corpus(hansard_clean$text_processed)
+liwc_scores <- textstat_polarity(corpus_hansard, 
+                                 dictionary = data_dictionary_LSD2015)
+
+# Add scores to main dataframe
+hansard_clean <- hansard_clean %>%
+    mutate(liwc_score = liwc_scores$sentiment)
+
+# Now aggregate by quarter
+liwc_quarterly <- hansard_clean %>%
+    mutate(
+        quarter = ceiling(as.numeric(substr(date, 6, 7))/3),
+        year_quarter = paste0(year, "-Q", quarter)
+    ) %>%
+    group_by(year_quarter) %>%
+    summarize(
+        avg_liwc = mean(liwc_score, na.rm = TRUE),
+        .groups = 'drop'
+    )
+
+# Join with comparison data
+comparison_with_liwc <- comparison_with_econ %>%
+    left_join(liwc_quarterly, by = "year_quarter")
+
+# Plot
+ggplot(comparison_with_liwc) +
+    annotate("rect",
+            xmin = "1973-Q3",
+            xmax = "1975-Q2",
+            ymin = -Inf, ymax = Inf,
+            alpha = 0.2, fill = "gray") +
+    geom_line(aes(x = year_quarter, y = polarity_rescaled, 
+                  group = 1, color = "Our Lexicon")) +
+    geom_line(aes(x = year_quarter, y = scale(avg_liwc), 
+                  group = 1, color = "LSD2015")) +
+    geom_line(aes(x = year_quarter, y = scale(misery),
+                  group = 1, color = "Misery Index")) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "LSD2015 Analysis with Economic Context",
+         subtitle = "Gray band indicates recession period (1973-Q3 to 1975-Q2)",
+         y = "Standardized Score",
+         color = "Measure Type") +
+    scale_color_manual(values = c("Our Lexicon" = "#013D80", 
+                                 "LSD2015" = "#6B1082",
+                                 "Misery Index" = "#006400"))
+```
+
+#### Analyze the 10 most discrepent texts
+```{r}
+# Function to analyze discrepancies between Custom and LSD lexicons
+analyze_discrepant_texts <- function(data, lexicon, type="LSD") {
+    # Select correct score column based on type
+    score_col <- if(type=="LSD") "liwc_score" else "bing_score"
+    
+    # Find most discrepant texts
+    discrepant_texts <- data %>%
+        filter(!is.na(!!sym(score_col)) & !is.na(polarity)) %>%
+        mutate(
+            sentiment_diff = abs(scale(!!sym(score_col))[1] - scale(polarity)[1]),
+            comparison_score = !!sym(score_col)  # Store comparison score
+        ) %>%
+        arrange(desc(sentiment_diff)) %>%
+        select(text_processed, polarity, comparison_score) %>%
+        head(10)
+    
+    # Analyze each text
+    for(i in 1:nrow(discrepant_texts)) {
+        cat("\nAnalyzing Text", i, "\n")
+        cat("Full Text:", discrepant_texts$text_processed[i], "\n\n")
+        cat("Custom Score:", round(discrepant_texts$polarity[i], 3), "\n")
+        cat(type, "Score:", round(discrepant_texts$comparison_score[i], 3), "\n\n")
+        
+        # Get word-level scores
+        words <- unlist(strsplit(tolower(discrepant_texts$text_processed[i]), "\\s+"))
+        
+        # Custom lexicon matches
+        custom_matches <- words[words %in% lexicon$lemma]
+        custom_scores <- sapply(custom_matches, function(w) {
+            score <- lexicon$polarity[lexicon$lemma == w]
+            paste(w, ":", round(score, 3))
+        })
+        
+        # Comparison lexicon matches
+        if(type == "LSD") {
+            comp_matches <- words[words %in% names(data_dictionary_LSD2015)]
+            comp_scores <- sapply(comp_matches, function(w) {
+                score <- ifelse(data_dictionary_LSD2015[[w]] == "positive", 1, -1)
+                paste(w, ":", score)
+            })
+        } else {
+            comp_matches <- words[words %in% bing_sentiment$word]
+            comp_scores <- sapply(comp_matches, function(w) {
+                sentiment <- bing_sentiment$sentiment[bing_sentiment$word == w]
+                score <- ifelse(sentiment == "positive", 1, -1)
+                paste(w, ":", score)
+            })
+        }
+        
+        cat("Custom Lexicon matches:\n")
+        if(length(custom_scores) > 0) {
+            cat(paste(custom_scores, collapse = "\n"), "\n")
+        } else {
+            cat("No matches found\n")
+        }
+        
+        cat("\n", type, "Lexicon matches:\n")
+        if(length(comp_scores) > 0) {
+            cat(paste(comp_scores, collapse = "\n"), "\n")
+        } else {
+            cat("No matches found\n")
+        }
+        
+        cat("\n", rep("-", 80), "\n")
+    }
+}
+
+cat("=== LSD Comparison ===\n")
+analyze_discrepant_texts(hansard_clean, lexicon, "LSD")
+```
+
+#### Observations:
+
+We can't see which words contribute to the score because LSD2015 works differently - it categorizes text into positive/negative categories rather than assigning individual word scores. 
+
+Despite that, it shows very different overall scores while custom lexicon assigns moderate scores (typically between -1 and 1) for the selected texts. 
+
+Intriguingly, for Text 3: "How much of this money has gone to the machine tool firm of Alfred Herbert in Coventry? How much has been spent on imported machine tools? Since this is taxpayers' money, intended to help the British industry, is it not a ridiculous practice to spend the money on imports? ", custom lexicon assigns a positive score while LSD assigns a zero. The tone is apparantly negative, but custom lexicon assigns quite a high score for ***"much"***.
+
+
+### Alternative Lexicon: Bing
+
+```{r}
+library(tidytext)
+library(tidyr)
+
+# Get Bing lexicon
+bing_sentiment <- get_sentiments("bing")
+
+# Function to compute Bing sentiment
+compute_bing_sentiment <- function(text) {
+    words <- tibble(word = unlist(strsplit(tolower(text), "\\s+"))) %>%
+        inner_join(bing_sentiment, by = "word")
+    
+    # Calculate ratio of positive to negative words
+    if(nrow(words) > 0) {
+        score <- sum(words$sentiment == "positive") - sum(words$sentiment == "negative")
+        return(score/nrow(words))  # Normalize by number of matched words
+    } else {
+        return(NA)
+    }
+}
+
+# Calculate Bing scores
+hansard_clean <- hansard_clean %>%
+    mutate(bing_score = sapply(text_processed, compute_bing_sentiment))
+
+# Aggregate by quarter
+bing_quarterly <- hansard_clean %>%
+    mutate(
+        quarter = ceiling(as.numeric(substr(date, 6, 7))/3),
+        year_quarter = paste0(year, "-Q", quarter)
+    ) %>%
+    group_by(year_quarter) %>%
+    summarize(
+        avg_bing = mean(bing_score, na.rm = TRUE),
+        .groups = 'drop'
+    )
+
+# Join and plot
+comparison_with_bing <- comparison_with_econ %>%
+    left_join(bing_quarterly, by = "year_quarter")
+
+# Plot comparison
+ggplot(comparison_with_bing) +
+    annotate("rect",
+            xmin = "1973-Q3",
+            xmax = "1975-Q2",
+            ymin = -Inf, ymax = Inf,
+            alpha = 0.2, fill = "gray") +
+    geom_line(aes(x = year_quarter, y = polarity_rescaled, 
+                  group = 1, color = "Our Lexicon")) +
+    geom_line(aes(x = year_quarter, y = scale(avg_bing), 
+                  group = 1, color = "Bing")) +
+    geom_line(aes(x = year_quarter, y = scale(misery),
+                  group = 1, color = "Misery Index")) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = "Sentiment Measures and Economic Context",
+         subtitle = "Gray band indicates recession period (1973-Q3 to 1975-Q2)",
+         y = "Standardized Score",
+         color = "Measure Type") +
+    scale_color_manual(values = c("Our Lexicon" = "#021B48", 
+                                 "Bing" = "#7B0082",
+                                 "Misery Index" = "#006400"))
+```
+
+```{r}
+# Use the same function as before to analyze discrepancies between lexicons
+cat("\n=== Bing Comparison ===\n")
+analyze_discrepant_texts(hansard_clean, lexicon, "Bing")
+```
+
+#### Observations:
+
+#### Text 1:
+
+"asked the Secretary of State for Trade and Industry whether he will make a statement about progress in administering financial assistance to the machine tool industry by his Department. " 
+
+- Custom lexicon assigns a positive (0.482) score from multiple terms, while Bing assigns a strong positive (1) from single word "progress". 
+
+- This exemplifies that in the context of parliamentary language, Bing's ***limited coverage can indeed lead to oversimplified scoring.***
+
+#### Text 6:
+ "On the broader question, may I ask when the Minister will be commenting on the general investment outlook, in view of the forecasts for 1973 which are now well below the earlier forecasts? There is an obvious crisis of confidence and a general anxiety. Will the Government now be making an authoritative statement on investment prospects, including those for machine tools? "
+
+- The custom lexicon assigns a nuanced score of 0.369 balancing positive and negative terms, and also picks up more economic context words like "investment" "will" "broader",
+
+- Bing gives a moderate positive (0.5) from multiple extreme scores, and they are mostly ***emotional terms ("crisis", "confidence")***. This again demonstrates that a limit in scope while heavy emphasis on emotional intensity could make a lexicon less suitable in this research.
