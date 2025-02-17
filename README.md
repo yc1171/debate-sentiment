@@ -27,8 +27,9 @@ We selected this paper for replication because:
 </p>
 
 <ul>
-  <li>It demonstrates the case where use of a<strong>domain-specific sentiment lexicon</strong> would be particularly necessary when the content of interest has certain inherent characteristics not captured by a general-purpose lexicon, and preserving those features would be relevant for the study.</li>
-  <li>Its provides a structured approach to aggregate <strong>temporal sentiment trends</strong> with comparisons of real-world economic events, which can be adapted in a wide range of quesries in computational social science. </li>
+  <li>The almost perfect </strong>counter-cyclical pattern</strong> between sentiment and economic indicators raises interesting questions about sentiment measurement in political text </li>
+  <li>It provides an opportunity to </strong>examine trade-offs</strong> between domain-specific and general-purpose sentiment lexicons </li>
+  <li>The 1973-1977 period offers a clear test case with significant economic events </li>
 </ul>
 
 We focus on replicating only a specific component of the original study because the original paper employs complex time series econometrics that require extensive statistical expertise. The 1973-1977 period also offers quite a clear test case due to significant economic events that allows us to compare the performance of multiple lexicons.
@@ -66,8 +67,8 @@ It links this period to labor conflicts, economic downturns, and inflation spike
 <!-- PREREQUISITES -->
 <h2 id="prerequisites"> Prerequisites</h2>
 
-<!--This project is written in Python programming language. <br>-->
-The following open source packages are used in this project:
+<!--This project is written in R programming language. <br>-->
+The following R packages are required:
 * tidyverse
 * tidyr
 * lubridate
@@ -94,9 +95,10 @@ Our replication includes modifications and additional analysis, detailed below.
 <h3> Data</h3>
 
 <ul>
-  <li><code>emotion-final-q.csv</code> - Final dataset (quarterly, normalized variables).</li>
-  <li><code>emotion-final-y.csv</code> - Final dataset (yearly, normalized variables).</li>
-  <li><code>lexicon-polarity.csv</code> - Domain-specific polarity lexicon (4200 words).</li>
+  <li><code>emotion-final-q.csv</code> - Quarterly aggregated data for polarity score and economic indicators.</li>
+  <li><code>emotion-final-y.csv</code> - Yearly aggregated data for polarity score and economic indicators.</li>
+  <li><code>lexicon-polarity.csv</code> - Authors' domain-specific lexicon (4200 words).</li>
+  <li><code>uk_hansard_1973_1977.csv</code> - Raw debate text for replication (subset on year 1973-1977).</li>
 </ul>
 
 ---
@@ -104,12 +106,14 @@ Our replication includes modifications and additional analysis, detailed below.
 <h3> Scripts</h3>
 
 <ul>
-  <li><code>replication-script.r</code> - R script for replicating the sentiment analysis and generating outputs.</li>
+  <li><code>replication-script.r</code> - Main analysis script </li>
+  <li><code>exploration.Rmd</code> -  Initial data exploration </li>
+  <li><code>lexicon_comparison.Rmd</code> - Detailed lexicon analysis </li>
 </ul>
 
 ---
 
-<h3> Output</h3>
+<h3> Outputs</h3>
 
 <ul>
   <li><code>AFINN_senti_comp.png</code> - Sentiment comparison using the AFINN lexicon.</li>
@@ -126,9 +130,9 @@ Our replication includes modifications and additional analysis, detailed below.
 
 <ul>
   <li>Reproduced the original sentiment analysis using updated scripts.</li>
-  <li>Generated sentiment comparison plots with multiple lexicons (AFINN, BING, LSD).</li>
-  <li>Performed sentiment correlation analysis with economic indicators (misery index, unemployment).</li>
   <li>Validated results by comparing with the original author's dataset.</li>
+  <li>Generated sentiment comparison plots with multiple lexicons (AFINN, BING, LSD).</li>
+  <li>Examined word-level scoring differences across lexicons.</li>
 </ul>
 
 <br>
@@ -141,6 +145,8 @@ This replication study was conducted as part of the replication exercise for
 PPOL 6801 - Text as Data (Spring 2025) at 
 <a href="https://mccourt.georgetown.edu/">Georgetown University, McCourt School of Public Policy</a>.
 </p>
+
+We thank the original authors for making their data and code publicly available, and Professor Nejla Asimovic for guidance on this replication exercise.
 
 <ul>
   <li><strong>Irene Chen</strong> - <a href="mailto:yc1171@georgetown.edu">yc1171@georgetown.edu</a></li>
