@@ -47,7 +47,7 @@ Our replication exercise aims to verify the original findings and explore potent
 
 <p>
 The original study by Rheault et al. (2016) analyzed debates from the <a href="http://data.politicalmashup.nl/parldumps/uk/">British House of Commons’ Hansard</a> spanning from <strong>1909 to 2013</strong>. 
-The dataset consists of digitized parliamentary records, including speeches, oral questions, and answers. The dataset has been continuously updated.
+The dataset consists of digitized parliamentary records, including speeches, oral questions, and answers. These records have been continuously updated.
 To capture sentiment, the authors constructed a domain-specific polarity lexicon using word embeddings (GloVe) trained on this corpus.
 </p>
 
