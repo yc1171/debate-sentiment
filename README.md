@@ -53,11 +53,13 @@ To capture sentiment, the authors constructed a domain-specific polarity lexicon
 
 <h3>Our Approach</h3>
 <ul>
-  <li><strong>Time Frame:</strong> While the original study spans over a century with more than 5 million records, we focus on debates from <strong>1973–1977</strong> to analyze sentiment during a specific historical period. The paper highlights the major recession of 1973–1975 as a notable period of negativity in parliamentary speeches.
-It links this period to labor conflicts, economic downturns, and inflation spikes.</li>
-  <li><strong>Lexicon Adaptation:</strong> We reconstruct and evaluate the domain-specific polarity lexicon using alternative word embedding techniques.</li>
-  <li><strong>Sentiment Aggregation:</strong> We explore different sentiment scoring and normalization techniques to compare with the original results.</li>
-  <li><strong>Alternative Data Sources:</strong> We examine potential extensions, including external economic and political indicators, to further validate sentiment trends.</li>
+  <li><strong>Time Frame:</strong> While the original study spans over a century with more than 5 million records, we focus on debates from <strong>1973–1977</strong> to analyze sentiment during a specific historical period. The paper highlights the major recession of 1973–1975 as a notable period of negativity in parliamentary speeches. It links this period to labor conflicts, economic downturns, and inflation spikes.</li>
+  <li><strong>Lexicon Comparison:</strong> We compare four different lexicons:</li>
+  <li>- Authors' custom parliamentary lexicon</li>
+  <li>- AFINN (-5 to +5 integer scores)</li>
+  <li>- Bing (binary positive/negative)</li>
+  <li>- LSD2015 (designed for political text)</li>
+  <li><strong>Methodology:</strong> We follow the authors' minimal preprocessing approach while exploring how different lexicons handle parliamentary language.</li>
 </ul>
 
 
